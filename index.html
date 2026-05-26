@@ -518,6 +518,10 @@ let editIngresoId = null;
 let editGastoId   = null;
 let editClasifIdx = null;
 
+/* Control de carga inicial desde Firebase (para habilitar el login) */
+let datosConfigListos = false;
+let datosProyectosListos = false;
+
 /* ============================================================
    UTILIDADES
    ============================================================ */
@@ -597,6 +601,8 @@ function escucharConfig(){
       document.getElementById("form-login").style.display = hay ? "" : "none";
       document.getElementById("form-primer-admin").style.display = hay ? "none" : "";
     }
+    datosConfigListos = true;
+    intentarHabilitarLogin();
   }, (err)=>{
     console.error("Config:", err);
     mostrarLoginMsg("error","No se pudo conectar con la base de datos.");
@@ -638,6 +644,8 @@ function escucharProyectos(){
         renderAnios(); render();
       }
     }
+    datosProyectosListos = true;
+    intentarHabilitarLogin();
   }, (err)=>{
     console.error("Proyectos:", err);
     setSync("error");
@@ -1275,7 +1283,22 @@ document.getElementById("btn-crear-admin").onclick=crearPrimerAdmin;
 document.getElementById("btn-crear-proyecto").onclick=crearProyecto;
 document.getElementById("login-clave").onkeydown=e=>{ if(e.key==="Enter") intentarLogin(); };
 
+/* El botón de ingreso arranca bloqueado hasta que Firebase
+   termine de cargar la configuración y la lista de proyectos. */
+const btnLoginEl = document.getElementById("btn-login");
+btnLoginEl.disabled = true;
+btnLoginEl.textContent = "Conectando…";
+
 escucharConfig();
+escucharProyectos();   /* cargar proyectos desde el inicio, para el login */
+
+/* Activar el botón cuando los datos ya están disponibles */
+function intentarHabilitarLogin(){
+  if(datosConfigListos && datosProyectosListos){
+    btnLoginEl.disabled = false;
+    btnLoginEl.textContent = "Ingresar";
+  }
+}
 </script>
 
 </body>
