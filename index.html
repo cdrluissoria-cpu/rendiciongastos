@@ -123,6 +123,7 @@
   .clasif-form{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end;}
 
   .resumen-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;}
+  .resumen-grid.resumen-4{grid-template-columns:repeat(4,1fr);}
   .tarjeta{border-radius:8px;padding:18px;text-align:center;color:#fff;}
   .tarjeta .etq{font-size:.85rem;opacity:.9;text-transform:uppercase;letter-spacing:.5px;}
   .tarjeta .monto{font-size:1.55rem;font-weight:700;margin-top:6px;}
@@ -298,6 +299,36 @@
       Aún no hay ningún año creado. Use «＋ Nuevo año» para comenzar (por ejemplo, 2026).
     </div>
 
+    <!-- MONTO ASIGNADO AL AÑO -->
+    <section class="sec-rendicion">
+      <div class="titulo-seccion"><h3>Monto asignado al año</h3></div>
+      <div class="cuerpo-seccion">
+        <!-- Vista para el administrador: editable -->
+        <div id="monto-editable" class="no-imprimir" style="display:none;">
+          <div class="form-grid" style="grid-template-columns:1fr auto;align-items:flex-end;">
+            <div class="campo">
+              <label>Monto asignado / presupuesto del año</label>
+              <input type="number" id="monto-input" min="0" step="0.01" placeholder="0,00">
+            </div>
+            <button class="btn-verde" id="btn-guardar-monto" onclick="guardarMonto()">💾 Guardar monto</button>
+          </div>
+          <p style="font-size:.84rem;color:var(--gris);">
+            Este monto solo puede ser cargado o modificado por el administrador.
+          </p>
+        </div>
+        <!-- Vista para la hermana: solo lectura -->
+        <div id="monto-solo-lectura" style="display:none;">
+          <p style="font-size:.95rem;">
+            Monto asignado para este año:
+            <b id="monto-texto" style="color:var(--azul);font-size:1.15rem;">$ 0</b>
+          </p>
+          <p style="font-size:.84rem;color:var(--gris);">
+            Este monto es definido por el Centro Administrativo.
+          </p>
+        </div>
+      </div>
+    </section>
+
     <!-- 1. INGRESOS -->
     <section class="sec-rendicion">
       <div class="titulo-seccion"><h3>1. Ingresos a rendir</h3></div>
@@ -404,12 +435,14 @@
     <section class="sec-rendicion">
       <div class="titulo-seccion"><h3>Resumen de la rendición</h3></div>
       <div class="cuerpo-seccion">
-        <div class="resumen-grid">
+        <div class="resumen-grid resumen-4">
+          <div class="tarjeta" style="background:#5a4a8a;"><div class="etq">Monto asignado al año</div><div class="monto" id="res-monto">$ 0</div></div>
           <div class="tarjeta t-ingreso"><div class="etq">Total ingresos recibidos</div><div class="monto" id="res-ingresos">$ 0</div></div>
           <div class="tarjeta t-gasto"><div class="etq">Total gastos rendidos</div><div class="monto" id="res-gastos">$ 0</div></div>
           <div class="tarjeta t-dif"><div class="etq">Diferencia a rendir</div><div class="monto" id="res-diferencia">$ 0</div></div>
         </div>
         <div class="estado-rendicion estado-completa" id="estado-rendicion">Rendición completa</div>
+        <div class="estado-rendicion" id="estado-monto" style="margin-top:8px;background:#ece9f3;color:#5a4a8a;border:1px solid #5a4a8a;">Saldo del monto asignado</div>
       </div>
     </section>
 
@@ -906,7 +939,7 @@ function nuevoAnio(){
       avisar("El año "+clave+" ya existe. Selecciónelo en la lista.");
       anioActivo=clave; renderAnios(); render(); return;
     }
-    P().anios[clave]={ ingresos:[], gastos:[], clasificaciones:CLASIF_INICIALES.slice() };
+    P().anios[clave]={ ingresos:[], gastos:[], clasificaciones:CLASIF_INICIALES.slice(), montoAsignado:0 };
     anioActivo=clave;
     persistir();
     renderAnios(); render();
@@ -916,6 +949,39 @@ function cambiarAnio(){
   anioActivo=document.getElementById("sel-anio").value||null;
   cancelarIngreso(); cancelarGasto(); cancelarClasif();
   render();
+}
+
+/* ============================================================
+   MONTO ASIGNADO AL AÑO
+   ============================================================ */
+function esAdmin(){
+  return sesion && sesion.tipo==="admin";
+}
+function guardarMonto(){
+  if(!A()) return;
+  if(!esAdmin()){ avisar("Solo el administrador puede modificar el monto asignado."); return; }
+  const m=parseFloat(document.getElementById("monto-input").value);
+  if(isNaN(m)||m<0){ avisar("Ingrese un monto válido."); return; }
+  A().montoAsignado=m;
+  persistir();
+  render();
+  avisar("Monto asignado guardado.");
+}
+function renderMonto(){
+  const monto = (A() && typeof A().montoAsignado==="number") ? A().montoAsignado : 0;
+  const editable=document.getElementById("monto-editable");
+  const lectura=document.getElementById("monto-solo-lectura");
+  if(esAdmin()){
+    /* El administrador ve el campo editable */
+    editable.style.display="";
+    lectura.style.display="none";
+    document.getElementById("monto-input").value = monto || "";
+  }else{
+    /* La hermana ve el monto en solo lectura */
+    editable.style.display="none";
+    lectura.style.display="";
+    document.getElementById("monto-texto").textContent=formatMoneda(monto);
+  }
 }
 function renderAnios(){
   const sel=document.getElementById("sel-anio");
@@ -1140,6 +1206,7 @@ function render(){
   }
   renderIngresos(); renderGastos();
   renderClasif(); renderSelectClasif(); renderResumen();
+  renderMonto();
 }
 function renderIngresos(){
   const tb=document.getElementById("tbody-ingresos");
@@ -1219,9 +1286,13 @@ function renderSelectClasif(){
 }
 function renderResumen(){
   const ti=totalIngresos(), tg=totalGastos(), dif=ti-tg;
+  const monto = (typeof A().montoAsignado==="number") ? A().montoAsignado : 0;
+  document.getElementById("res-monto").textContent=formatMoneda(monto);
   document.getElementById("res-ingresos").textContent=formatMoneda(ti);
   document.getElementById("res-gastos").textContent=formatMoneda(tg);
   document.getElementById("res-diferencia").textContent=formatMoneda(dif);
+
+  /* Estado de la rendición (ingresos vs gastos) */
   const est=document.getElementById("estado-rendicion");
   if(dif>0){
     est.textContent="Saldo pendiente de rendir: "+formatMoneda(dif);
@@ -1232,6 +1303,19 @@ function renderResumen(){
   }else{
     est.textContent="Gastos superiores a los fondos recibidos: "+formatMoneda(Math.abs(dif));
     est.className="estado-rendicion estado-excedido";
+  }
+
+  /* Estado del monto asignado (monto vs gastos) */
+  const estM=document.getElementById("estado-monto");
+  const saldoMonto = monto - tg;
+  if(monto===0){
+    estM.textContent="Sin monto asignado para este año";
+  }else if(saldoMonto>0){
+    estM.textContent="Disponible del monto asignado: "+formatMoneda(saldoMonto);
+  }else if(saldoMonto===0){
+    estM.textContent="Monto asignado totalmente utilizado";
+  }else{
+    estM.textContent="Gastos superiores al monto asignado: "+formatMoneda(Math.abs(saldoMonto));
   }
 }
 function totalIngresos(){ return A().ingresos.reduce((s,i)=>s+(Number(i.importe)||0),0); }
@@ -1261,6 +1345,7 @@ function manejarClick(e){
    ============================================================ */
 window.nuevoAnio=nuevoAnio;
 window.cambiarAnio=cambiarAnio;
+window.guardarMonto=guardarMonto;
 window.guardarIngreso=guardarIngreso;
 window.cancelarIngreso=cancelarIngreso;
 window.guardarGasto=guardarGasto;
